@@ -1,0 +1,73 @@
+name: Pipeline For AWS Infrastructure
+on:
+  workflow_dispatch:
+    inputs:
+        environment:
+          type: 'choice'
+          description: 'Specify the target environment'
+          required: true
+          options:
+              - 'QA'
+              - 'Stage'
+              - 'Prod'
+          default: 'Stage'
+        region:
+          type: 'string'
+          description: 'Enter the AWS region'
+          required: true
+        apply:
+          type: 'boolean'
+          description: 'Apply the Kubernetes manifests'
+          required: true
+          default: false
+  
+
+jobs:    
+  setup:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.Environment }}
+    steps:
+    - 
+        name: Checkout
+        uses: actions/checkout@v3
+    - 
+        name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ github.event.inputs.region }}
+    -
+        name: Deploy Infrastructure
+        run: |
+            cd terraform/aws
+            terraform init
+            terraform apply --auto-approve
+    
+  apply:
+    needs: ["setup"]
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.Environment }}
+    if: github.event.inputs.apply == 'true'
+    steps:
+    - 
+        name: Checkout
+        uses: actions/checkout@v3
+    -   
+        name: Install AWS CLI and kubectl
+        run: |
+            sudo apt-get update
+            sudo apt-get install -y awscli
+            sudo apt-get install -y kubectl
+    - 
+        name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+            aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            aws-region: ${{ github.event.inputs.region }}
+    -
+        name: Apply kubernetes files
+        run: |
+            aws eks update-kubeconfig --region ${{ github.event.inputs.region }} --name eks-cluster
+            /usr/bin/kubectl apply -f kubernetes/manifests/sample.yaml
