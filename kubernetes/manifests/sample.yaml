@@ -1,9 +1,15 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sample
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
     app: sample
   name: sample
+  namespace: sample
 spec:
   replicas: 1
   selector:
@@ -20,6 +26,13 @@ spec:
         name: sample
         ports:
         - containerPort: 8080
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 100m
 ---
 apiVersion: v1
 kind: Service
@@ -28,14 +41,48 @@ metadata:
   labels:
     app: sample
   name: sample
+  namespace: sample
 spec:
   ports:
   - port: 8080
     protocol: TCP
-    nodePort: 30080
     targetPort: 8080
   selector:
     app: sample
-  type: LoadBalancer
+  type: NodePort
 status:
   loadBalancer: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sample
+  namespace: sample
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: instance
+    alb.ingress.kubernetes.io/group.name: sample
+    alb.ingress.kubernetes.io/group.order: '1'
+    # alb.ingress.kubernetes.io/certificate-arn: 
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":"80"}, {"HTTPS":"443"}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "15"
+    # alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/healthcheck-port: traffic-port
+    alb.ingress.kubernetes.io/healthcheck-protocol: HTTP
+    alb.ingress.kubernetes.io/healthcheck-timeout-seconds: "5"
+    alb.ingress.kubernetes.io/healthy-threshold-count: "2"
+
+spec:
+  ingressClassName: alb
+  rules:
+    - host: samplex.ddns.net
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sample
+                port:
+                  number: 8080
